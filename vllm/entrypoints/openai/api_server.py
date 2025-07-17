@@ -28,6 +28,8 @@ from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.openapi.docs import get_swagger_ui_html
 from prometheus_client import make_asgi_app
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.concurrency import iterate_in_threadpool
@@ -1359,9 +1361,23 @@ def build_app(args: Namespace) -> FastAPI:
                       redoc_url=None,
                       lifespan=lifespan)
     else:
-        app = FastAPI(lifespan=lifespan)
+        app = FastAPI(docs_url=None, lifespan=lifespan)
     app.include_router(router)
     app.root_path = args.root_path
+
+    # Mount static files for custom Swagger UI
+    if not args.disable_fastapi_docs:
+        app.mount("/static", StaticFiles(directory="static"), name="static")
+
+        @app.get("/docs", include_in_schema=False)
+        async def custom_swagger_ui_html():
+            return get_swagger_ui_html(
+                openapi_url=app.openapi_url,
+                title=app.title + " - VLLM - Swagger UI",
+                oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+                swagger_js_url="/static/swagger-ui-bundle.js",
+                swagger_css_url="/static/swagger-ui.css",
+            )
 
     mount_metrics(app)
 
